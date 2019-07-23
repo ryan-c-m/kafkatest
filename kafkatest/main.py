@@ -39,17 +39,20 @@ class KafkaTest:
         :return:
         """
 
-    def send_one(self, message):
+    def send_one(self, key, message):
         """
         Send a single, static message via the producer
         :return:
         """
-        self.producer.send(self.producer_topic, message)
+        self.producer.send(self.producer_topic, key, message)
         start = time.time()
-        result = next(self.consumer)
-        end = time.time()
-        result = {'input': message, 'output': result, 'latency': end - start}
-        self.messages.append(result)
+
+        for result in self.consumer:
+            if result.key == key:
+                end = time.time()
+                result = {'input': message, 'output': result.value, 'latency': end - start}
+                self.messages.append(result)
+                break
 
     def all_messages(self):
         """
@@ -76,12 +79,25 @@ class KafkaTest:
         :return:
         """
 
-    def assert_next(self, expected_message, max_latency=None):
+    def assert_next(self, key, message, expected_message, max_latency=None):
         """
         Assert that the next message is as expected
         :param expected:
         :return:
         """
+        self.send_one(key, message)
+
+        latency = self.messages[-1]['latency']
+        if latency > max_latency:
+            assert False, "Latency of {} exceeds max_latency {}".format(latency, max_latency)
+
+        consumed_msg = self.messages[-1]["output"]
+
+        if consumed_msg == expected_message:
+            assert True
+        else:
+            assert False, "Consumed message {} does not match expected_message {}"\
+                .format(consumed_msg, expected_message)
 
     def assert_all(self, expected_message, max_latency=None):
         """
