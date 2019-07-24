@@ -2,7 +2,8 @@
 Main module
 """
 import time
-
+from kafka import KafkaConsumer, KafkaProducer
+from kafka.errors import KafkaError
 
 class KafkaTest:
     """
@@ -44,17 +45,22 @@ class KafkaTest:
         Send a single, static message via the producer
         :return:
         """
-        self.producer.send(self.producer_topic, key, message)
-        start = time.time()
 
-        msg_pack = self.consumer.poll(timeout_ms=timeout)
-        for tp, messages in msg_pack.items():
-            for result in messages:
-                if result.key == key:
-                    end = time.time()
-                    result = {'input': message, 'output': result.value, 'latency': end - start}
-                    self.messages.append(result)
-                    return result
+        future = self.producer.send(self.producer_topic, key=key, value=message)
+        record_metadata = future.get(timeout=10)
+
+        start = time.time()
+        timeout_time = start + timeout
+        while time.time() < timeout_time:
+            msg_pack = self.consumer.poll()
+            for tp, messages in msg_pack.items():
+                for result in messages:
+                    if result.partition == record_metadata.partition and result.offset == record_metadata.offset:
+                        end = time.time()
+                        result = {'input': message, 'output': result.value, 'latency': end - start,
+                                  'metadata': record_metadata}
+                        self.messages.append(result)
+                        return result
 
         raise Exception("Failed to consume message")
 
@@ -83,16 +89,16 @@ class KafkaTest:
         :return:
         """
 
-    def assert_next(self, key, message, expected_message, max_latency=None):
+    def assert_next(self, key, message, expected_message, max_latency=None, timeout=10):
         """
         Assert that the next message is as expected
         :param expected:
         :return:
         """
-        self.send_one(key, message, 30000)
+        self.send_one(key, message, timeout)
 
         latency = self.messages[-1]['latency']
-        if latency > max_latency:
+        if max_latency is not None and latency > max_latency:
             assert False, "Latency of {} exceeds max_latency {}".format(latency, max_latency)
 
         consumed_msg = self.messages[-1]["output"]
@@ -109,3 +115,17 @@ class KafkaTest:
         :param expected:
         :return:
         """
+
+def main():
+    kafkatest = KafkaTest()
+    kafkatest.configure_producer("test", KafkaProducer(bootstrap_servers=['127.0.0.1:9092']))
+    consumer = KafkaConsumer('test',
+                             auto_offset_reset='earliest',
+                             bootstrap_servers=['127.0.0.1:9092'])
+    kafkatest.configure_consumer(consumer)
+    kafkatest.send_one(b'1', b'msg', 10)
+    print(kafkatest.all_messages())
+
+
+if __name__ == "__main__":
+    main()
