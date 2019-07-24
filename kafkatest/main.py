@@ -39,7 +39,7 @@ class KafkaTest:
         :return:
         """
 
-    def send_one(self, key, message):
+    def send_one(self, key, message, timeout):
         """
         Send a single, static message via the producer
         :return:
@@ -47,12 +47,16 @@ class KafkaTest:
         self.producer.send(self.producer_topic, key, message)
         start = time.time()
 
-        for result in self.consumer:
-            if result.key == key:
-                end = time.time()
-                result = {'input': message, 'output': result.value, 'latency': end - start}
-                self.messages.append(result)
-                break
+        msg_pack = self.consumer.poll(timeout_ms=timeout)
+        for tp, messages in msg_pack.items():
+            for result in messages:
+                if result.key == key:
+                    end = time.time()
+                    result = {'input': message, 'output': result.value, 'latency': end - start}
+                    self.messages.append(result)
+                    return result
+
+        raise Exception("Failed to consume message")
 
     def all_messages(self):
         """
@@ -85,7 +89,7 @@ class KafkaTest:
         :param expected:
         :return:
         """
-        self.send_one(key, message)
+        self.send_one(key, message, 30000)
 
         latency = self.messages[-1]['latency']
         if latency > max_latency:

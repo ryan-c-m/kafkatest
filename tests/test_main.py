@@ -1,9 +1,16 @@
 import pytest
 from kafkatest.main import KafkaTest
-from kafka import KafkaConsumer
 from collections import namedtuple
 
 Message = namedtuple('Message', 'key value topic partition')
+
+def poll(timeout_ms=None):
+    test_msg = Message("key",  "test_message_transformed", "topic", 0)
+    return {"tp": [test_msg]}
+
+def poll_no_match(timeout_ms=None):
+    test_msg = Message("key",  "test_message_transformed_not_matching", "topic", 0)
+    return {"tp": [test_msg]}
 
 class TestMain:
 
@@ -13,6 +20,8 @@ class TestMain:
         self.producer_stub = mocker.stub()
         self.producer_stub.send = mocker.stub()
         self.consumer_stub = mocker.stub()
+        self.consumer_stub.poll = poll
+        self.test_msg = Message("key",  "test_message_transformed", "topic", 0)
         kafka_test.configure_producer('topic', self.producer_stub)
         kafka_test.configure_consumer(self.consumer_stub)
         return kafka_test
@@ -25,41 +34,32 @@ class TestMain:
         assert kafka_test.consumer is self.consumer_stub
 
     def test_send_one_sends_and_receives_message(self, kafka_test, mocker):
-        test_msg = Message("key",  "test_message_transformed", "topic", 0)
-        consumer_stub = iter([test_msg])
-        kafka_test.configure_consumer(consumer_stub)
-        kafka_test.send_one(test_msg.key, "test_message")
+        kafka_test.configure_consumer(self.consumer_stub)
+        kafka_test.send_one("key", "test_message", 3000)
         self.producer_stub.send.assert_called_once()
         assert kafka_test.messages[0]['input'] is "test_message"
         assert kafka_test.messages[0]['output'] is "test_message_transformed"
 
     def test_send_one_reports_latency(self, kafka_test, mocker):
-        test_msg = Message("key",  "test_message_transformed", "topic", 0)
-        consumer_stub = iter([test_msg])
-        kafka_test.configure_consumer(consumer_stub)
-        kafka_test.send_one(test_msg.key, "test_message")
+        kafka_test.configure_consumer(self.consumer_stub)
+        kafka_test.send_one("key", "test_message", 3000)
         self.producer_stub.send.assert_called_once()
         assert kafka_test.messages[0]['latency'] is not None
 
     def test_assert_next_checks_expected_message_match_when_match(self, kafka_test):
-        test_msg = Message("key",  "test_message_transformed", "topic", 0)
-        consumer_stub = iter([test_msg])
-        kafka_test.configure_consumer(consumer_stub)
         kafka_test.assert_next("key", "test_message",  "test_message_transformed", 100)
 
     def test_assert_next_checks_expected_message_match_when_does_not_match_fails(self, kafka_test):
-        test_msg = Message("key",  "test_message_transformed_not_matching", "topic", 0)
-        consumer_stub = iter([test_msg])
-        kafka_test.configure_consumer(consumer_stub)
+        self.consumer_stub.poll = poll_no_match
+        kafka_test.configure_consumer(self.consumer_stub)
 
         with pytest.raises(AssertionError, match="Consumed message test_message_transformed_not_" \
                                                  "matching does not match expected_message test_message_transformed"):
             kafka_test.assert_next("key", "test_message",  "test_message_transformed", 100)
 
-    def test_assert_next_checks_expected_message_match_when_does_not_match_fails(self, kafka_test):
-        test_msg = Message("key",  "test_message_transformed_not_matching", "topic", 0)
-        consumer_stub = iter([test_msg])
-        kafka_test.configure_consumer(consumer_stub)
+    def test_assert_next_latency_fails(self, kafka_test):
+        self.consumer_stub.poll = poll
+        kafka_test.configure_consumer(self.consumer_stub)
 
         with pytest.raises(AssertionError, match="exceeds max_latency 0"):
             kafka_test.assert_next("key", "test_message",  "test_message_transformed", 0)
