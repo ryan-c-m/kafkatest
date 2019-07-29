@@ -51,8 +51,9 @@ class TestMain:
         assert kafka_test.messages[0]['output'] is "test_message_transformed"
 
     def test_send_one_sends_and_receive_times_out_exception(self, kafka_test, mocker):
-        self.producer_stub.send.return_value.get.return_value = Message("key",  "test_message_transformed", "topic", 0, 12)
-        with pytest.raises(Exception):
+        self.consumer_stub.poll = mocker.stub()
+        self.consumer_stub.poll.return_value = {"tp": []}
+        with pytest.raises(Exception, match="Failed to consume message"):
             kafka_test.configure_consumer(self.consumer_stub)
             kafka_test.send_one("key", "test_message", 3)
             self.producer_stub.send.assert_called_once()

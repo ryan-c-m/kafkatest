@@ -1,0 +1,5 @@
+version: '2'
+services:
+  kafkatest:
+    build: .
+    entrypoint: python3 -s -m pytest /app/tests-unit

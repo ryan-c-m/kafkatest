@@ -55,7 +55,7 @@ class KafkaTest:
             msg_pack = self.consumer.poll()
             for tp, messages in msg_pack.items():
                 for result in messages:
-                    if result.partition == record_metadata.partition and result.offset == record_metadata.offset:
+                    if result.key == key:
                         end = time.time()
                         result = {'input': message, 'output': result.value, 'latency': end - start,
                                   'metadata': record_metadata}
@@ -118,10 +118,11 @@ class KafkaTest:
 
 def main():
     kafkatest = KafkaTest()
-    kafkatest.configure_producer("test", KafkaProducer(bootstrap_servers=['127.0.0.1:9092']))
+
+    kafkatest.configure_producer("test", KafkaProducer(bootstrap_servers=['kafka:9092']))
     consumer = KafkaConsumer('test',
                              auto_offset_reset='earliest',
-                             bootstrap_servers=['127.0.0.1:9092'])
+                             bootstrap_servers=['kafka:9092'])
     kafkatest.configure_consumer(consumer)
     kafkatest.send_one(b'1', b'msg', 10)
     print(kafkatest.all_messages())
