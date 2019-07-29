@@ -45,7 +45,7 @@ class TestMain:
 
     def test_send_one_sends_and_receives_message(self, kafka_test, mocker):
         kafka_test.configure_consumer(self.consumer_stub)
-        kafka_test.send_one("key", "test_message", 3)
+        kafka_test.send_one("key", "test_message")
         self.producer_stub.send.assert_called_once()
         assert kafka_test.messages[0]['input'] is "test_message"
         assert kafka_test.messages[0]['output'] is "test_message_transformed"
@@ -55,12 +55,12 @@ class TestMain:
         self.consumer_stub.poll.return_value = {"tp": []}
         with pytest.raises(Exception, match="Failed to consume message"):
             kafka_test.configure_consumer(self.consumer_stub)
-            kafka_test.send_one("key", "test_message", 3)
+            kafka_test.send_one("key", "test_message")
             self.producer_stub.send.assert_called_once()
 
     def test_send_one_reports_latency(self, kafka_test, mocker):
         kafka_test.configure_consumer(self.consumer_stub)
-        kafka_test.send_one("key", "test_message", 3)
+        kafka_test.send_one("key", "test_message")
         self.producer_stub.send.assert_called_once()
         assert kafka_test.messages[0]['latency'] is not None
 

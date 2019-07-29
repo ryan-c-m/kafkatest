@@ -15,6 +15,7 @@ class KafkaTest:
         self.producer = None
         self.consumer = None
         self.messages = []
+        self.timeout=10
 
     def configure_producer(self, topic, kafka_producer):
         """
@@ -40,7 +41,7 @@ class KafkaTest:
         :return:
         """
 
-    def send_one(self, key, message, timeout):
+    def send_one(self, key, message):
         """
         Send a single, static message via the producer
         :return:
@@ -50,7 +51,7 @@ class KafkaTest:
         record_metadata = future.get(timeout=10)
 
         start = time.time()
-        timeout_time = start + timeout
+        timeout_time = start + self.timeout
         while time.time() < timeout_time:
             msg_pack = self.consumer.poll()
             for tp, messages in msg_pack.items():
@@ -89,13 +90,13 @@ class KafkaTest:
         :return:
         """
 
-    def assert_next(self, key, message, expected_message, max_latency=None, timeout=10):
+    def assert_next(self, key, message, expected_message, max_latency=None):
         """
         Assert that the next message is as expected
         :param expected:
         :return:
         """
-        self.send_one(key, message, timeout)
+        self.send_one(key, message)
 
         latency = self.messages[-1]['latency']
         if max_latency is not None and latency > max_latency:
@@ -124,9 +125,7 @@ def main():
                              auto_offset_reset='earliest',
                              bootstrap_servers=['kafka:9092'])
     kafkatest.configure_consumer(consumer)
-    kafkatest.send_one(b'1', b'msg', 10)
-    print(kafkatest.all_messages())
-
+    kafkatest.assert_next(b'1', b'msg', b'msg', max_latency=30)
 
 if __name__ == "__main__":
     main()
